@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Lecture • Mini Classroom</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head><body>
+  <div class="nav">
+    <div class="brand"><a href="courses.html">← Courses</a></div>
+    <div class="actions">
+      <span id="userChip" class="badge"></span>
+      <a href="courses.html" class="btn">Courses</a>
+      <button id="logoutBtn" class="btn">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+    <h1 id="lecTitle" class="h1">Lecture</h1>
+    <div id="lecMeta" class="row"></div>
+
+    <div class="card">
+      <div class="h2">Assignments</div>
+      <div id="assignmentsList" class="list"></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    ensureAuthed();
+    const lectureId = parseInt(qs('id'),10);
+    let me = null, lecture = null, assignments = [];
+
+    async function load(){
+      me = await getMe(); setNav(me);
+      const lectures = await apiFetch('/lectures/lectures/');
+      lecture = lectures.find(x => x.id === lectureId);
+      if(!lecture){ alert('Lecture not found'); location.href='courses.html'; return; }
+      document.getElementById('lecTitle').textContent = lecture.topic;
+      document.getElementById('lecMeta').innerHTML = lecture.presentation ? `<a class="btn" target="_blank" href="${lecture.presentation}">Download presentation</a>` : '<span class="badge">No presentation</span>';
+
+      const all = await apiFetch('/lectures/assignments/');
+      assignments = all.filter(a => a.lecture === lectureId);
+      const list = document.getElementById('assignmentsList');
+      list.innerHTML = '';
+      assignments.forEach(a=>{
+        const el = document.createElement('div');
+        el.className='card';
+        el.innerHTML = `<div class="row" style="justify-content:space-between">
+          <div>${a.text}</div>
+          <div><a class="btn small" href="assignment_detail.html?id=${a.id}">Open</a></div>
+        </div>`;
+        list.appendChild(el);
+      });
+    }
+    load();
+  </script>
+</body></html>

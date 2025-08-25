@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Courses • Mini Classroom</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="nav">
+    <div class="brand">Mini Classroom</div>
+    <div class="actions">
+      <span id="userChip" class="badge"></span>
+      <a href="courses.html" class="btn">Courses</a>
+      <button id="logoutBtn" class="btn">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+    <h1 class="h1">My Courses</h1>
+    <div id="teacherCreate" class="card hidden">
+      <h2 class="h2">Create course</h2>
+      <form id="createCourseForm">
+        <div class="grid-2">
+          <label>Title<input name="title" required></label>
+          <label>Description<input name="description"></label>
+        </div>
+        <div class="row right">
+          <button class="btn primary" type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="coursesList" class="list"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    ensureAuthed();
+
+    (async function init() {
+      try {
+        const me = await getMe();
+        setNav(me);
+
+        if (isTeacher(me)) {
+          document.getElementById('teacherCreate').classList.remove('hidden');
+        }
+
+        const courses = await apiFetch('/courses/courses/');
+        const list = document.getElementById('coursesList');
+        list.innerHTML = '';
+
+        if (courses.length === 0) {
+          list.innerHTML = '<p>No courses yet.</p>';
+        }
+
+        courses.forEach(c => {
+          const div = document.createElement('div');
+          div.className = 'card';
+          div.innerHTML = `
+            <div class="row" style="justify-content:space-between">
+              <div>
+                <div class="h2">${c.title}</div>
+                <div>${c.description || ''}</div>
+                <div class="small">Teacher: ${c.owner?.username || '—'}</div>
+              </div>
+              <div>
+                <a class="btn" href="course_detail.html?id=${c.id}">Open</a>
+              </div>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+
+        const createForm = document.getElementById('createCourseForm');
+        if (createForm) {
+          createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const payload = Object.fromEntries(fd.entries());
+            try {
+              await apiFetch('/courses/courses/', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+              });
+              location.reload();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
+        }
+
+      } catch (err) {
+        alert("Error loading courses: " + err.message);
+        logout();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Assignment • Mini Classroom</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head><body>
+  <div class="nav">
+    <div class="brand"><a href="courses.html">← Courses</a></div>
+    <div class="actions">
+      <span id="userChip" class="badge"></span>
+      <a href="courses.html" class="btn">Courses</a>
+      <button id="logoutBtn" class="btn">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+    <h1 class="h1">Assignment</h1>
+    <div id="assignmentBox" class="card"></div>
+
+    <div id="studentSubmit" class="card hidden">
+      <h2 class="h2">Submit your work</h2>
+      <form id="submitForm">
+        <label>Your answer<textarea name="text" required></textarea></label>
+        <div class="row right"><button class="btn primary" type="submit">Submit</button></div>
+      </form>
+    </div>
+
+    <div id="submissionsBox" class="card hidden">
+      <h2 class="h2">Submissions</h2>
+      <div id="submissionsList" class="list"></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    ensureAuthed();
+    const assignmentId = parseInt(qs('id'),10);
+    let me = null, assignment = null, lecture = null, course = null, isTeacherOnCourse = false;
+
+    async function load(){
+      me = await getMe(); setNav(me);
+
+      const assignments = await apiFetch('/lectures/assignments/');
+      assignment = assignments.find(a => a.id === assignmentId);
+      if(!assignment){ alert('Assignment not found'); location.href = 'courses.html'; return; }
+
+      const lectures = await apiFetch('/lectures/lectures/');
+      lecture = lectures.find(l => l.id === assignment.lecture);
+      const courseId = lecture ? lecture.course : null;
+      if(courseId){
+        course = await apiFetch(`/courses/courses/${courseId}/`);
+      }
+      document.getElementById('assignmentBox').innerHTML = `<div>${assignment.text}</div>`;
+
+      isTeacherOnCourse = (me.role==='teacher') && (course?.owner?.id===me.id || (course?.teachers||[]).some(t=>t.id===me.id));
+
+      document.getElementById('studentSubmit').classList.toggle('hidden', me.role!=='student');
+
+      const allSubs = await apiFetch('/lectures/submissions/');
+      const subs = allSubs.filter(s => s.assignment === assignmentId);
+      const list = document.getElementById('submissionsList');
+      const box = document.getElementById('submissionsBox');
+      list.innerHTML = '';
+      if(subs.length){ box.classList.remove('hidden'); } else { box.classList.add('hidden'); }
+      subs.forEach(s=>{
+        const wrapper = document.createElement('div');
+        wrapper.className='card';
+        const grade = s.grade || null;
+        wrapper.innerHTML = `
+          <div><strong>Student #${s.student}</strong></div>
+          <div style="margin:6px 0">${s.text || ''}</div>
+          ${grade ? `<div class="badge">Score: ${grade.score}</div><div>${grade.feedback||''}</div>` : (isTeacherOnCourse ? `<div class="row"><button class="btn small" data-sub="${s.id}">Grade</button></div>`:'')}
+        `;
+        list.appendChild(wrapper);
+      });
+
+      if(isTeacherOnCourse){
+        list.querySelectorAll('button[data-sub]').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const subId = btn.getAttribute('data-sub');
+            const score = prompt('Score (0-100):'); if(score===null) return;
+            const feedback = prompt('Feedback (optional):') || '';
+            try{
+              await apiFetch('/lectures/grades/', {method:'POST', body: JSON.stringify({submission: parseInt(subId,10), score: parseInt(score,10), feedback})});
+              alert('Graded'); load();
+            }catch(err){ alert(err.message); }
+          });
+        });
+      }
+    }
+
+    document.getElementById('submitForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      try{
+        await apiFetch('/lectures/submissions/', { method:'POST', body: JSON.stringify({lecture: assignment.lecture, text: payload.text}) });
+        alert('Submitted'); e.target.reset(); load();
+      }catch(err){ alert(err.message); }
+    });
+
+    load();
+  </script>
+</body></html>

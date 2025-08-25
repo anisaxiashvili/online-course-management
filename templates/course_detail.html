@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Course • Mini Classroom</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="nav">
+    <div class="brand"><a href="courses.html">← Courses</a></div>
+    <div class="actions">
+      <span id="userChip" class="badge"></span>
+      <a href="courses.html" class="btn">Courses</a>
+      <button id="logoutBtn" class="btn">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row" style="justify-content:space-between">
+      <h1 id="courseTitle" class="h1">Course</h1>
+      <div id="courseActions" class="row"></div>
+    </div>
+
+    <div id="teacherTools" class="card hidden">
+      <h2 class="h2">Add lecture</h2>
+      <form id="createLectureForm">
+        <div class="grid-2">
+          <label>Topic<input name="topic" required></label>
+          <label>Presentation file (optional)<input type="file" name="presentation"></label>
+        </div>
+        <div class="row right">
+          <button class="btn primary" type="submit">Create lecture</button>
+        </div>
+      </form>
+
+      <h2 class="h2" style="margin-top:16px">Add assignment</h2>
+      <form id="createAssignmentForm">
+        <label>Attach to lecture
+          <select name="lecture" id="lectureSelect"></select>
+        </label>
+        <label>Text<textarea name="text" required></textarea></label>
+        <div class="row right">
+          <button class="btn primary" type="submit">Create assignment</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="h2">Lectures</div>
+        <div id="lecturesList" class="list"></div>
+      </div>
+      <div class="card">
+        <div class="h2">Assignments</div>
+        <div id="assignmentsList" class="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    ensureAuthed();
+
+    const courseId = parseInt(qs('id'), 10);
+    let me = null, course = null, lectures = [], assignments = [];
+
+    async function load() {
+      try {
+        me = await getMe();
+        setNav(me);
+
+        course = await apiFetch(`/courses/courses/${courseId}/`);
+        document.getElementById('courseTitle').textContent = course.title;
+
+        const teacher = me.role === 'teacher' && (
+          course.owner?.id === me.id ||
+          (course.teachers || []).some(t => t.id === me.id)
+        );
+        document.getElementById('teacherTools').classList.toggle('hidden', !teacher);
+
+        lectures = await apiFetch('/lectures/lectures/');
+        lectures = lectures.filter(l => l.course === courseId);
+
+        const lecList = document.getElementById('lecturesList');
+        const lecSelect = document.getElementById('lectureSelect');
+        lecList.innerHTML = '';
+        lecSelect.innerHTML = '';
+
+        if (lectures.length === 0) {
+          lecList.innerHTML = '<p>No lectures yet.</p>';
+        }
+
+        lectures.forEach(l => {
+          const li = document.createElement('div');
+          li.className = 'card';
+          li.innerHTML = `
+            <div class="row" style="justify-content:space-between">
+              <div>
+                <strong>${l.topic}</strong>
+                ${l.presentation ? ` • <a target="_blank" href="${l.presentation}">presentation</a>` : ''}
+              </div>
+              <div><a class="btn small" href="lecture_detail.html?id=${l.id}">Open</a></div>
+            </div>
+          `;
+          lecList.appendChild(li);
+
+          const opt = document.createElement('option');
+          opt.value = l.id;
+          opt.textContent = l.topic;
+          lecSelect.appendChild(opt);
+        });
+        assignments = await apiFetch('/lectures/assignments/');
+        assignments = assignments.filter(a => lectures.some(l => l.id === a.lecture));
+
+        const aList = document.getElementById('assignmentsList');
+        aList.innerHTML = '';
+        if (assignments.length === 0) {
+          aList.innerHTML = '<p>No assignments yet.</p>';
+        }
+
+        assignments.forEach(a => {
+          const li = document.createElement('div');
+          li.className = 'card';
+          li.innerHTML = `
+            <div class="row" style="justify-content:space-between">
+              <div>${a.text}</div>
+              <div><a class="btn small" href="assignment_detail.html?id=${a.id}">Open</a></div>
+            </div>
+          `;
+          aList.appendChild(li);
+        });
+
+      } catch (err) {
+        alert("Error loading course: " + err.message);
+      }
+    }
+
+    document.getElementById('createLectureForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      fd.append('course', courseId);
+      try {
+        await apiFetch('/lectures/lectures/', { method: 'POST', body: fd });
+        alert('Lecture created');
+        e.target.reset();
+        load();
+      } catch (err) {
+        alert("Failed to create lecture: " + err.message);
+      }
+    });
+
+    document.getElementById('createAssignmentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      payload.lecture = parseInt(payload.lecture, 10); 
+      try {
+        await apiFetch('/lectures/assignments/', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        alert('Assignment created');
+        e.target.reset();
+        load();
+      } catch (err) {
+        alert("Failed to create assignment: " + err.message);
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
