@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, decorators, response, status
+from . import services
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -53,7 +54,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         if not (course.owner_id == request.user.id or course.teachers.filter(id=request.user.id).exists()):
             return response.Response({'detail':'Only teachers can add students.'}, status=status.HTTP_403_FORBIDDEN)
         course.students.add(student)
-        return response.Response({'status':'student added', 'student': UserBriefSerializer(student).data})
+        return response.Response({'student': UserBriefSerializer(student).data})
 
     @decorators.action(detail=True, methods=['post'])
     def remove_student(self, request, pk=None):
@@ -63,7 +64,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         if not (course.owner_id == request.user.id or course.teachers.filter(id=request.user.id).exists()):
             return response.Response({'detail':'Only teachers can remove students.'}, status=status.HTTP_403_FORBIDDEN)
         course.students.remove(student)
-        return response.Response({'status':'student removed', 'student_id': student.id})
+        return response.Response({'student_id': student.id})
 
     @decorators.action(detail=True, methods=['post'])
     def add_teacher(self, request, pk=None):
@@ -73,4 +74,4 @@ class CourseViewSet(viewsets.ModelViewSet):
         if course.owner_id != request.user.id:
             return response.Response({'detail':'Only owner can add teachers.'}, status=status.HTTP_403_FORBIDDEN)
         course.teachers.add(teacher)
-        return response.Response({'status':'teacher added', 'teacher': UserBriefSerializer(teacher).data})
+        return response.Response({'teacher': UserBriefSerializer(teacher).data})
